@@ -11,7 +11,7 @@ import { MessagesGateway } from './messages.gateway';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
+        secret: config.get<string>('JWT_SECRET') || 'dev-secret-change-me',
       }),
     }),
   ],

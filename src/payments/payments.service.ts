@@ -17,8 +17,8 @@ export class PaymentsService {
     private prisma: PrismaService,
     private config: ConfigService,
   ) {
-    this.apiKey = this.config.get<string>('CINETPAY_API_KEY');
-    this.siteId = this.config.get<string>('CINETPAY_SITE_ID');
+    this.apiKey = this.config.get<string>('CINETPAY_API_KEY') || '';
+    this.siteId = this.config.get<string>('CINETPAY_SITE_ID') || '';
   }
 
   async initiatePayment(userId: string, dto: InitiatePaymentDto) {
