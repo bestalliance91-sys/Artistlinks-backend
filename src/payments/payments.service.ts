@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { CinetPayClient, parseNotification } from 'cinetpay-js';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { InitiatePaymentDto, CinetPayNotificationDto } from './dto/payment.dto';
@@ -9,16 +9,20 @@ import { getPricingForTier, calculateCommission } from './pricing.config';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly apiKey: string;
-  private readonly siteId: string;
-  private readonly baseUrl = 'https://api-checkout.cinetpay.com/v2';
+  private client: CinetPayClient;
 
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
   ) {
-    this.apiKey = this.config.get<string>('CINETPAY_API_KEY') || '';
-    this.siteId = this.config.get<string>('CINETPAY_SITE_ID') || '';
+    this.client = new CinetPayClient({
+      credentials: {
+        CI: {
+          apiKey: this.config.get<string>('CINETPAY_API_KEY_CI') || '',
+          apiPassword: this.config.get<string>('CINETPAY_API_PASSWORD_CI') || '',
+        },
+      },
+    });
   }
 
   async initiatePayment(userId: string, dto: InitiatePaymentDto) {
@@ -30,26 +34,27 @@ export class PaymentsService {
     const transactionId = `AL-${uuidv4()}`;
     const commissionAmount = calculateCommission(pricing.amount, dto.tier);
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
-
-    const payload = {
-      apikey: this.apiKey,
-      site_id: this.siteId,
-      transaction_id: transactionId,
-      amount: pricing.amount,
-      currency: 'XOF',
-      description: `Abonnement ArtistLinks ${dto.tier}`,
-      customer_name: user?.profile?.fullName || 'Utilisateur',
-      customer_email: user?.email,
-      customer_phone_number: dto.phoneNumber,
-      notify_url: this.config.get<string>('CINETPAY_NOTIFY_URL'),
-      return_url: this.config.get<string>('CINETPAY_RETURN_URL'),
-      channels: 'MOBILE_MONEY',
-      lang: 'fr',
-    };
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
 
     try {
-      const response = await axios.post(`${this.baseUrl}/payment`, payload);
+      const payment = await this.client.payment.initialize({
+        currency: 'XOF',
+        merchantTransactionId: transactionId,
+        amount: pricing.amount,
+        lang: 'fr',
+        designation: `Abonnement ArtistLinks ${dto.tier}`,
+        clientEmail: user?.email || '',
+        clientFirstName: user?.profile?.fullName?.split(' ')[0] || 'Utilisateur',
+        clientLastName: user?.profile?.fullName?.split(' ').slice(1).join(' ') || 'ArtistLinks',
+        clientPhoneNumber: dto.phoneNumber,
+        successUrl: this.config.get<string>('CINETPAY_RETURN_URL') || '',
+        failedUrl: this.config.get<string>('CINETPAY_RETURN_URL') || '',
+        notifyUrl: this.config.get<string>('CINETPAY_NOTIFY_URL') || '',
+        channel: 'PUSH',
+      }, 'CI');
 
       await this.prisma.payment.create({
         data: {
@@ -57,46 +62,49 @@ export class PaymentsService {
           transactionId,
           amount: pricing.amount,
           currency: 'XOF',
-          method: 'ORANGE_MONEY', // valeur par défaut, mise à jour via webhook
+          method: 'ORANGE_MONEY',
           status: 'PENDING',
           subscriptionTier: dto.tier,
           commissionAmount,
-          cinetpayPaymentToken: response.data?.data?.payment_token,
-          rawResponse: response.data,
+          // TODO: vérifier le nom exact du champ token dans la réponse (console.log(payment) au 1er test)
+          cinetpayPaymentToken: (payment as any)?.paymentToken ?? null,
+          rawResponse: payment as any,
         },
       });
 
       return {
-        paymentUrl: response.data?.data?.payment_url,
+        // TODO: vérifier le nom exact du champ URL dans la réponse (console.log(payment) au 1er test)
+        paymentUrl: (payment as any)?.paymentUrl ?? (payment as any)?.details?.paymentUrl,
         transactionId,
       };
-    } catch (error) {
-      this.logger.error('Erreur initiation paiement CinetPay', error?.response?.data || error.message);
+    } catch (error: any) {
+      this.logger.error('Erreur initiation paiement CinetPay', error?.message || error);
       throw new BadRequestException("Échec de l'initiation du paiement");
     }
   }
 
   // Webhook appelé par CinetPay pour confirmer le statut réel d'un paiement
-  async handleNotification(dto: CinetPayNotificationDto) {
+  async handleNotification(rawBody: any) {
+    const notification = parseNotification(rawBody) as any;
+
     const payment = await this.prisma.payment.findUnique({
-      where: { transactionId: dto.cpm_trans_id },
+      where: { transactionId: notification.merchantTransactionId },
     });
+
     if (!payment) {
-      this.logger.warn(`Notification reçue pour transaction inconnue: ${dto.cpm_trans_id}`);
+      this.logger.warn(`Notification reçue pour transaction inconnue: ${notification.merchantTransactionId}`);
       return { status: 'ignored' };
     }
 
     // Vérification du statut réel auprès de CinetPay (ne jamais faire confiance au webhook seul)
-    const verification = await this.verifyTransaction(dto.cpm_trans_id);
-
-    const isSuccess = verification?.data?.status === 'ACCEPTED';
+    const statusResult = await this.client.payment.getStatus(notification.transactionId, 'CI');
+    const isSuccess = (statusResult as any)?.status === 'SUCCESS';
 
     await this.prisma.payment.update({
-      where: { transactionId: dto.cpm_trans_id },
+      where: { transactionId: notification.merchantTransactionId },
       data: {
         status: isSuccess ? 'SUCCESS' : 'FAILED',
-        method: this.mapPaymentMethod(dto.payment_method),
-        rawResponse: verification?.data,
+        rawResponse: statusResult as any,
       },
     });
 
@@ -108,26 +116,6 @@ export class PaymentsService {
     }
 
     return { status: 'processed', success: isSuccess };
-  }
-
-  private async verifyTransaction(transactionId: string) {
-    const response = await axios.post(`${this.baseUrl}/payment/check`, {
-      apikey: this.apiKey,
-      site_id: this.siteId,
-      transaction_id: transactionId,
-    });
-    return response.data;
-  }
-
-  private mapPaymentMethod(method: string): any {
-    const map: Record<string, string> = {
-      OM: 'ORANGE_MONEY',
-      MOMO: 'MTN_MOMO',
-      MOOV: 'MOOV_MONEY',
-      WAVE: 'WAVE',
-      CARD: 'CARD',
-    };
-    return map[method] || 'ORANGE_MONEY';
   }
 
   async getMyPayments(userId: string) {
