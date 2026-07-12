@@ -31,7 +31,7 @@ export class PaymentsService {
       throw new BadRequestException("Le palier gratuit ne nécessite pas de paiement");
     }
 
-    const transactionId = `AL-${uuidv4()}`;
+    const transactionId = `AL-${uuidv4().replace(/-/g, '').substring(0, 27)}`;
     const commissionAmount = calculateCommission(pricing.amount, dto.tier);
 
     const user = await this.prisma.user.findUnique({
