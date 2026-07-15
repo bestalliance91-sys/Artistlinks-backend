@@ -96,10 +96,24 @@ export class MusicReleaseService {
     return this.updateStatus(releaseId, ReleaseStatus.LIVE, labelUserId);
   }
 
+  private readonly allowedTransitions: Record<ReleaseStatus, ReleaseStatus[]> = {
+    PENDING_REVIEW: [ReleaseStatus.APPROVED, ReleaseStatus.REJECTED],
+    APPROVED: [ReleaseStatus.MANUALLY_UPLOADED, ReleaseStatus.REJECTED],
+    MANUALLY_UPLOADED: [ReleaseStatus.LIVE],
+    LIVE: [],
+    REJECTED: [],
+  };
+
   private async updateStatus(releaseId: string, status: ReleaseStatus, processedBy: string) {
     const release = await this.prisma.musicRelease.findUnique({ where: { id: releaseId } });
     if (!release) {
       throw new NotFoundException('Release introuvable');
+    }
+    const allowed = this.allowedTransitions[release.status] || [];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `Transition invalide : impossible de passer de ${release.status} à ${status}`,
+      );
     }
     return this.prisma.musicRelease.update({
       where: { id: releaseId },
