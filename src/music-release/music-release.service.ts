@@ -15,7 +15,7 @@ export class MusicReleaseService {
   async uploadAudio(file: Express.Multer.File): Promise<UploadApiResponse> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { resource_type: 'video', folder: 'artistlinks/music-releases' },
+        { resource_type: 'auto', folder: 'artistlinks/music-releases' },
         (error, result) => {
           if (error) return reject(error);
           if (result === undefined) return reject(new Error("Upload Cloudinary echoue"));
