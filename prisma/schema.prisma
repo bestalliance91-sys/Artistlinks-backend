@@ -47,64 +47,65 @@ enum PaymentMethod {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  phone           String?  @unique
-  password        String
-  role            UserRole @default(ARTIST)
+  id               String           @id @default(uuid())
+  email            String           @unique
+  phone            String?          @unique
+  password         String
+  role             UserRole         @default(ARTIST)
   subscriptionTier SubscriptionTier @default(FREE)
-  isVerified      Boolean  @default(false)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isVerified       Boolean          @default(false)
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  profile         Profile?
-  sentConnections     Connection[] @relation("ConnectionRequester")
-  receivedConnections Connection[] @relation("ConnectionAddressee")
-  sentMessages    Message[] @relation("MessageSender")
-  receivedMessages Message[] @relation("MessageReceiver")
-  payments        Payment[]
-  notifications   Notification[]
+  profile             Profile?
+  sentConnections     Connection[]   @relation("ConnectionRequester")
+  receivedConnections Connection[]   @relation("ConnectionAddressee")
+  sentMessages        Message[]      @relation("MessageSender")
+  receivedMessages    Message[]      @relation("MessageReceiver")
+  payments            Payment[]
+  notifications       Notification[]
+  MusicRelease        MusicRelease[]
 
   @@map("users")
 }
 
 model Profile {
-  id            String   @id @default(uuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  fullName      String
-  artistName    String?
-  bio           String?
-  avatarUrl     String?
-  coverUrl      String?
-  country       String?
-  city          String?
-  genres        String[] @default([])
-  skills        String[] @default([])
-  socialLinks   Json?
-  portfolioUrls String[] @default([])
-  yearsActive   Int?
-  isAvailableForWork Boolean @default(true)
+  fullName           String
+  artistName         String?
+  bio                String?
+  avatarUrl          String?
+  coverUrl           String?
+  country            String?
+  city               String?
+  genres             String[] @default([])
+  skills             String[] @default([])
+  socialLinks        Json?
+  portfolioUrls      String[] @default([])
+  yearsActive        Int?
+  isAvailableForWork Boolean  @default(true)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("profiles")
 }
 
 model Connection {
-  id           String           @id @default(uuid())
-  requesterId  String
-  addresseeId  String
-  status       ConnectionStatus @default(PENDING)
-  message      String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id          String           @id @default(uuid())
+  requesterId String
+  addresseeId String
+  status      ConnectionStatus @default(PENDING)
+  message     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  requester    User @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  addressee    User @relation("ConnectionAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  requester User @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("ConnectionAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
   @@map("connections")
@@ -118,28 +119,30 @@ model Message {
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
-  sender     User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver   User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@map("messages")
 }
 
 model Payment {
-  id              String        @id @default(uuid())
-  userId          String
-  transactionId   String        @unique
-  amount          Decimal       @db.Decimal(10, 2)
-  currency        String        @default("XOF")
-  method          PaymentMethod
-  status          PaymentStatus @default(PENDING)
-  subscriptionTier SubscriptionTier
-  commissionAmount Decimal?     @db.Decimal(10, 2)
+  id                   String           @id @default(uuid())
+  userId               String
+  transactionId        String           @unique
+  amount               Decimal          @db.Decimal(10, 2)
+  currency             String           @default("XOF")
+  method               PaymentMethod
+  status               PaymentStatus    @default(PENDING)
+  subscriptionTier     SubscriptionTier
+  commissionAmount     Decimal?         @db.Decimal(10, 2)
   cinetpayPaymentToken String?
-  rawResponse     Json?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  rawResponse          Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  musicRelease MusicRelease?
 
   @@map("payments")
 }
@@ -154,7 +157,48 @@ model Notification {
   metadata  Json?
   createdAt DateTime @default(now())
 
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
+}
+
+enum ReleaseStatus {
+  PENDING_REVIEW
+  APPROVED
+  MANUALLY_UPLOADED
+  LIVE
+  REJECTED
+}
+
+enum ReleaseType {
+  SINGLE
+  EP
+  ALBUM
+}
+
+model MusicRelease {
+  id        String   @id @default(uuid())
+  artistId  String
+  artist    User     @relation(fields: [artistId], references: [id])
+  paymentId String?  @unique
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  title       String
+  type        ReleaseType
+  audioUrl    String
+  coverArtUrl String
+  isrc        String?
+  upc         String?
+
+  platforms String[]
+  status    ReleaseStatus @default(PENDING_REVIEW)
+
+  submittedAt     DateTime  @default(now())
+  processedAt     DateTime?
+  processedBy     String?
+  distroKidUrl    String?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

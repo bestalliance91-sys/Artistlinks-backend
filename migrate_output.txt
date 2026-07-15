@@ -1,0 +1,8 @@
+prisma:warn Prisma detected unknown OS "android" and may not work as expected. Defaulting to "linux".
+prisma:warn Prisma detected unknown OS "android" and may not work as expected. Defaulting to "linux".
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-plain-cloud-aiadxj53-pooler.c-4.us-east-1.aws.neon.tech"
+
+Error: Schema engine error:
+
