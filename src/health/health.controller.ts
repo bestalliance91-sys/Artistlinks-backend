@@ -6,4 +6,11 @@ export class HealthController {
   check() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
+
+  @Get('ip')
+  async getOutboundIp() {
+    const response = await fetch('https://ifconfig.me/ip');
+    const ip = await response.text();
+    return { outboundIp: ip.trim() };
+  }
 }
