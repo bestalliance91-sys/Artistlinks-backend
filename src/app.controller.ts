@@ -5,6 +5,7 @@ export class AppController {
   @Get('health')
   health() {
     return { status: 'ok', service: 'ArtistLinks Backend', timestamp: new Date().toISOString() };
+  }
 
   @Get('debug-ip')
   async debugIp() {
