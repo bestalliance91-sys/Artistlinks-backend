@@ -13,5 +13,4 @@ export class AppController {
     const v6 = await fetch('https://api6.ipify.org?format=json').then(r => r.json()).catch(e => ({ error: e.message }));
     return { ipv4: v4, ipv6: v6 };
   }
-  }
 }
