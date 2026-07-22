@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Headers, HttpCode, Logger } from '@nestjs/common';
 import { WaveService } from './wave.service';
 
-@Controller('api/v1/payments/wave')
+@Controller('payments/wave')
 export class WaveController {
   private readonly logger = new Logger(WaveController.name);
 
