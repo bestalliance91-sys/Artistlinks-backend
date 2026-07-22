@@ -9,6 +9,7 @@ import { MessagesModule } from './messages/messages.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
 import { MusicReleaseModule } from './music-release/music-release.module';
+import { WaveModule } from './payments/wave.module';
 import { AppController } from './app.controller';
 import { HealthController } from './health/health.controller';
 
@@ -24,6 +25,7 @@ import { HealthController } from './health/health.controller';
     PaymentsModule,
     AdminModule,
     MusicReleaseModule,
+    WaveModule,
   ],
   controllers: [AppController, HealthController],
 })
